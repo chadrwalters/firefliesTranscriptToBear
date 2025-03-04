@@ -1,0 +1,77 @@
+[project]
+name = "fireflies-to-bear"
+version = "0.1.0"
+description = "A tool to process Fireflies.ai PDF meeting summaries and transcripts into Bear notes"
+authors = [
+    { name = "Chad Walters" }
+]
+dependencies = [
+    "PyMuPDF>=1.22.5",
+    "watchdog>=3.0.0",
+    "python-dotenv>=1.0.0",
+]
+requires-python = ">=3.8"
+readme = "README.md"
+license = { text = "MIT" }
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "ruff>=0.2.0",
+    "black>=24.0.0",
+    "mypy>=1.8.0",
+    "isort>=5.13.0",
+]
+
+[project.scripts]
+fireflies-to-bear = "fireflies_to_bear.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fireflies_to_bear"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["PyMuPDF.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-ra -q"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:builtin type SwigPyPacked has no __module__ attribute",
+    "ignore:builtin type SwigPyObject has no __module__ attribute",
+    "ignore:builtin type swigvarlink has no __module__ attribute"
+]

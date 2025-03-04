@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+.cm/
+config.toml
+output/
+*_backup/
+config.toml
+
+# Testing
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage_html/
+conversations.json
+users.json
+
+# DS_Store
+.DS_Store
+**/.DS_Store
+
+# Rule summaries
+.cursor/rules/**/*.summary.json
+.cursor/rules/**/*.summary.md
+.cursor/rules/summaries/
+
+# Gmail to Bear specific
+credentials.json
+token.json
+token.pickle
+*.token
+config.ini
+processed_emails.txt
+*.pem
+*.key
+MagicMock/
+
+# Sensitive data
+.env
+.secrets
+
+# Cache files
+.cm/cache/
+
+# Log files
+.cm/logs/
+
+# Configuration files
+config.toml
+config/consolidate-markdown.toml
+!config/consolidate-markdown.template.toml
+nova.toml
+!nova.toml.template
+
+.repo*
+
+local-research/
+export/
