@@ -1,5 +1,6 @@
 """Main entry point for the Fireflies to Bear application."""
 
+import argparse
 import configparser
 import logging
 import os
@@ -7,7 +8,14 @@ from pathlib import Path
 from typing import List, Optional
 
 from .app import AppConfig, Application
-from .config import ConfigValidationError, ConfigValidator
+from .config import (
+    ConfigValidationError,
+    ConfigValidator,
+    create_default_config,
+    get_config_file_path,
+    get_state_file_path,
+    load_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,31 +42,106 @@ def setup_logging(log_file: Optional[str] = None, log_level: str = "INFO") -> No
     )
 
 
-def load_config(config_file: Optional[str] = None) -> configparser.ConfigParser:
-    """Load configuration from file.
-
-    Args:
-        config_file: Optional path to config file. If not provided, uses default location.
+def parse_arguments() -> argparse.Namespace:
+    """Parse command-line arguments.
 
     Returns:
-        ConfigParser object with loaded configuration
-
-    Raises:
-        ConfigValidationError: If config file cannot be loaded
+        Parsed arguments namespace
     """
-    config = configparser.ConfigParser()
+    parser = argparse.ArgumentParser(
+        description="Process Fireflies.ai PDFs and create Bear notes"
+    )
 
-    # Default config file location
-    if not config_file:
-        config_file = os.path.expanduser("~/.config/fireflies-to-bear/config.ini")
+    # General options
+    parser.add_argument(
+        "--config",
+        "-c",
+        help="Path to config file (default: .f2b/config.ini or ~/.config/fireflies-to-bear/config.ini)",
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose output"
+    )
 
-    try:
-        with open(config_file, "r", encoding="utf-8") as f:
-            config.read_file(f)
-            logger.debug("Raw config directories: %s", dict(config["directories"]))
-            return config
-    except Exception as e:
-        raise ConfigValidationError(f"Error loading config file: {e}")
+    # Create subparsers for different commands
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+
+    # Init command
+    init_parser = subparsers.add_parser("init", help="Initialize configuration")
+    init_parser.add_argument(
+        "--force", "-f", action="store_true", help="Overwrite existing configuration"
+    )
+
+    # Run command
+    run_parser = subparsers.add_parser("run", help="Process PDF files")
+    run_parser.add_argument(
+        "--summary", "-s", help="Path to a specific summary PDF file to process"
+    )
+    run_parser.add_argument(
+        "--transcript", "-t", help="Path to a specific transcript PDF file to process"
+    )
+    run_parser.add_argument(
+        "--watch",
+        "-w",
+        action="store_true",
+        help="Watch directories for changes (continuous mode)",
+    )
+
+    # List command
+    list_parser = subparsers.add_parser("list", help="List processed notes")
+
+    return parser.parse_args()
+
+
+def initialize_config(force: bool = False) -> None:
+    """Initialize configuration in the .f2b directory.
+
+    Args:
+        force: Whether to overwrite existing configuration
+    """
+    config_path = get_config_file_path()
+
+    if config_path.exists() and not force:
+        logger.info(f"Configuration already exists at {config_path}")
+        logger.info("Use --force to overwrite")
+        return
+
+    path, config = create_default_config()
+    logger.info(f"Created default configuration at {path}")
+
+
+def list_processed_notes(app: Application) -> None:
+    """List all processed notes.
+
+    Args:
+        app: Application instance
+    """
+    processed_files = app.state_manager.get_processed_files()
+
+    if not processed_files:
+        logger.info("No processed files found")
+        return
+
+    logger.info(f"Found {len(processed_files)} processed files:")
+    for i, file in enumerate(processed_files, 1):
+        logger.info(
+            f"{i}. Summary: {Path(file.summary_path).name}, "
+            f"Transcript: {Path(file.transcript_path).name}, "
+            f"Bear ID: {file.bear_note_id}, "
+            f"Last processed: {file.last_processed}"
+        )
+
+
+def process_specific_files(
+    app: Application, summary_path: str, transcript_path: str
+) -> None:
+    """Process specific PDF files.
+
+    Args:
+        app: Application instance
+        summary_path: Path to summary PDF
+        transcript_path: Path to transcript PDF
+    """
+    app.process_specific_files(Path(summary_path), Path(transcript_path))
 
 
 def validate_config(config: configparser.ConfigParser) -> AppConfig:
@@ -92,11 +175,14 @@ def validate_config(config: configparser.ConfigParser) -> AppConfig:
         logging_config = validator.validate_logging_config(dict(config["logging"]))
         logger.debug("Validated logging config: %s", logging_config)
 
+        # Get state file path
+        state_file = get_state_file_path()
+
         # Create AppConfig from validated configurations
         return AppConfig(
             watch_directory=str(dir_config.summary_dir),
             transcript_directory=str(dir_config.transcript_dir),
-            state_file=Path(os.path.expanduser("~/.fireflies_processor/state.json")),
+            state_file=state_file,
             sleep_interval=service_config.interval,
             title_template=note_config.title_template,
             backup_count=service_config.backup_count,
@@ -123,24 +209,59 @@ def init_logging(config: AppConfig) -> None:
 
 def main() -> None:
     """Main entry point for the application."""
-    # Set up basic logging first
-    setup_logging()
+    args = parse_arguments()
+
+    # Set up basic logging
+    log_level = "DEBUG" if args.verbose else "INFO"
+    setup_logging(log_level=log_level)
 
     try:
+        # Handle init command
+        if args.command == "init":
+            initialize_config(force=args.force)
+            return
+
         # Load and validate configuration
-        config = load_config()
+        config = load_config(args.config)
         app_config = validate_config(config)
 
         # Update logging with validated configuration
-        log_config = config["logging"]
-        setup_logging(
-            log_file=log_config.get("file"),
-            log_level=log_config.get("level", "INFO"),
-        )
+        if "logging" in config:
+            log_config = config["logging"]
+            log_file = log_config.get("file")
 
-        # Create and run application
+            # If log file is relative, make it relative to .f2b dir
+            if (
+                log_file
+                and not log_file.startswith("/")
+                and not log_file.startswith("~")
+            ):
+                log_file = str(Path.cwd() / ".f2b" / log_file)
+
+            setup_logging(
+                log_file=log_file,
+                log_level=log_config.get("level", log_level),
+            )
+
+        # Create application instance
         app = Application(app_config)
-        app.run()
+
+        if args.command == "list":
+            # List processed notes
+            list_processed_notes(app)
+        elif args.command == "run":
+            if args.summary and args.transcript:
+                # Process specific files
+                process_specific_files(app, args.summary, args.transcript)
+            elif args.watch:
+                # Run in continuous watch mode
+                app.run()
+            else:
+                # Single processing run
+                app.process_directory()
+        else:
+            # Default behavior with no command - single process run
+            app.process_directory()
 
     except ConfigValidationError as e:
         logging.error(f"Configuration error: {e}")

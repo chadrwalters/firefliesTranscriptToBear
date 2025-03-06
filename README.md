@@ -1,17 +1,15 @@
 # Fireflies to Bear
 
-A macOS application that automatically processes Fireflies.ai meeting PDFs and creates organized notes in Bear.
+A command-line tool that processes Fireflies.ai meeting PDFs and creates organized notes in Bear.
 
 ## Features
 
-- Automatically monitors Fireflies.ai PDF directories
-- Processes both summary and transcript PDFs
+- Process Fireflies.ai summary and transcript PDFs
 - Creates organized notes in Bear with proper formatting
 - Maintains state to avoid duplicate processing
 - Handles file updates and modifications
-- Runs as a background service with automatic startup
-- Comprehensive error handling and recovery
 - Configurable note formatting and organization
+- Works in both single-run and watch modes
 
 ## Requirements
 
@@ -28,20 +26,20 @@ A macOS application that automatically processes Fireflies.ai meeting PDFs and c
    cd fireflies-to-bear
    ```
 
-2. Run the installation script:
+2. Install the package:
    ```bash
-   ./scripts/install.sh
+   pip install -e .
    ```
-
-   This will:
-   - Create a Python virtual environment
-   - Install all required dependencies
-   - Set up configuration directories
-   - Create and load the LaunchAgent for automatic startup
 
 ## Configuration
 
-The configuration file is located at `~/.config/fireflies-to-bear/config.ini`. You can edit it to customize:
+Initialize the configuration in your current directory:
+
+```bash
+fireflies-to-bear init
+```
+
+This creates a `.f2b` directory with configuration files. Edit `.f2b/config.ini` to customize:
 
 ```ini
 [directories]
@@ -59,71 +57,58 @@ separator = --==RAW NOTES==--
 tags = meeting,notes
 
 [service]
-# Interval between directory scans (in seconds)
+# Interval between directory scans (in seconds) - only used with --watch
 interval = 300
-# Location of the state file
-state_file = ~/.fireflies_processor/state.json
+# Location of the state file (relative to .f2b directory)
+state_file = state.json
 # Number of state file backups to keep
 backup_count = 3
 
 [logging]
 # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 level = INFO
-# Optional log file location
-file = ~/.fireflies_processor/logs/processor.log
+# Optional log file location (relative to .f2b directory)
+file = logs/processor.log
 ```
 
 ## Usage
 
-The application runs automatically in the background after installation. It will:
-
-1. Monitor the configured directories for new or modified PDFs
-2. Process matching summary and transcript files
-3. Create or update Bear notes with the content
-4. Maintain state to track processed files
-
-### Manual Control
-
-You can manually control the service using:
+### Process Files Once
 
 ```bash
-# Stop the service
-launchctl unload ~/Library/LaunchAgents/com.fireflies-to-bear.plist
+# Process all files based on configuration
+fireflies-to-bear run
 
-# Start the service
-launchctl load ~/Library/LaunchAgents/com.fireflies-to-bear.plist
+# Process specific files
+fireflies-to-bear run --summary path/to/summary.pdf --transcript path/to/transcript.pdf
 ```
 
-### Command Line Usage
-
-You can also run the application directly:
+### Watch for New Files
 
 ```bash
-# Run in the foreground
-fireflies-to-bear
+# Continuously monitor configured directories
+fireflies-to-bear run --watch
+```
 
-# Create default configuration
-fireflies-to-bear --init
+### List Processed Notes
 
-# Run with specific config file
-fireflies-to-bear --config /path/to/config.ini
+```bash
+# List all notes that have been processed
+fireflies-to-bear list
+```
 
+### Other Commands
+
+```bash
 # Show help
 fireflies-to-bear --help
+
+# Run with specific config file
+fireflies-to-bear --config /path/to/config.ini run
+
+# Enable verbose logging
+fireflies-to-bear --verbose run
 ```
-
-## Uninstallation
-
-To remove the application:
-
-```bash
-./scripts/uninstall.sh
-```
-
-This will:
-- Stop and remove the background service
-- Remove the virtual environment
-- Optionally remove configuration and log files
 
 ## Development
 
@@ -166,6 +151,20 @@ mypy src/
 
 # Run all checks
 pre-commit run --all-files
+```
+
+### Project Structure
+
+```
+fireflies-to-bear/
+├── .f2b/                    # Local configuration & state (not checked into git)
+│   ├── config.ini           # Configuration file
+│   ├── state.json           # State tracking file  
+│   └── logs/                # Log files
+├── src/
+│   └── fireflies_to_bear/   # Main application code
+├── tests/                   # Test suite
+└── README.md
 ```
 
 ## Troubleshooting

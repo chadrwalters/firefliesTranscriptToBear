@@ -450,6 +450,27 @@ def test_retry_exponential_backoff(
     mock_sleep.assert_any_call(2.0)  # Second retry with doubled delay
 
 
+def test_process_specific_files(
+    app: Application, sample_pdfs: Tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test processing specific PDF files."""
+    summary_path, transcript_path = sample_pdfs
+
+    # Mock the _process_file_pair method
+    mock_process = MagicMock()
+    monkeypatch.setattr(app, "_process_file_pair", mock_process)
+
+    # Call the method
+    app.process_specific_files(summary_path, transcript_path)
+
+    # Verify _process_file_pair was called with correct arguments
+    mock_process.assert_called_once()
+    args = mock_process.call_args[0][0]
+    assert isinstance(args, MatchedFiles)
+    assert args.summary.path == summary_path
+    assert args.transcript.path == transcript_path
+
+
 def test_process_file_pair_with_retries(
     app: Application, matched_files: MatchedFiles, monkeypatch: pytest.MonkeyPatch
 ) -> None:

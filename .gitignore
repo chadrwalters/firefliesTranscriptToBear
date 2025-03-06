@@ -70,6 +70,9 @@ processed_emails.txt
 *.key
 MagicMock/
 
+# Local configuration and state
+.f2b/
+
 # Sensitive data
 .env
 .secrets

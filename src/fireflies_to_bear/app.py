@@ -245,6 +245,53 @@ class Application:
         except Exception as e:
             self.logger.error(f"Error processing files: {e}")
 
+    def process_specific_files(self, summary_path: Path, transcript_path: Path) -> None:
+        """Process a specific pair of PDF files.
+
+        Args:
+            summary_path: Path to summary PDF file
+            transcript_path: Path to transcript PDF file
+        """
+        try:
+            if not summary_path.exists() or not transcript_path.exists():
+                self.logger.error("One or both files do not exist")
+                return
+
+            # Create monitored file objects
+            from datetime import datetime
+
+            from .file_monitor import MonitoredFile
+
+            # Get the current time for the modification time
+            now = datetime.now()
+
+            summary_file = MonitoredFile(
+                path=summary_path,
+                last_modified=now,
+                file_size=summary_path.stat().st_size,
+            )
+            transcript_file = MonitoredFile(
+                path=transcript_path,
+                last_modified=now,
+                file_size=transcript_path.stat().st_size,
+            )
+
+            # Create matched files object
+            from .file_matcher import MatchedFiles
+
+            matched_files = MatchedFiles(
+                summary=summary_file,
+                transcript=transcript_file,
+                meeting_date=now,
+                meeting_name=summary_path.stem.replace(" (Summary)", ""),
+            )
+
+            # Process the file pair
+            self._process_file_pair(matched_files)
+
+        except Exception as e:
+            self.logger.error(f"Error processing specific files: {e}")
+
     def process_directory(self) -> None:
         """Process all PDF files in the watch directory."""
         try:

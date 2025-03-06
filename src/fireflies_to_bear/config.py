@@ -1,10 +1,11 @@
 """Configuration validation and management for the Fireflies to Bear application."""
 
+import configparser
 import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 
 class ConfigValidationError(Exception):
@@ -45,6 +46,141 @@ class LoggingConfig:
 
     level: str
     file: Optional[Path] = None
+
+
+def get_config_directory() -> Path:
+    """Get the configuration directory path.
+
+    Prioritizes local .f2b directory, falls back to global config.
+
+    Returns:
+        Path to the configuration directory
+    """
+    local_config_dir = Path.cwd() / ".f2b"
+    if local_config_dir.exists():
+        return local_config_dir
+    return Path(os.path.expanduser("~/.config/fireflies-to-bear"))
+
+
+def ensure_config_directory() -> Path:
+    """Ensure the config directory exists and return its path.
+
+    Creates .f2b directory in current working directory if it doesn't exist.
+
+    Returns:
+        Path to the configuration directory
+    """
+    config_dir = Path.cwd() / ".f2b"
+    config_dir.mkdir(exist_ok=True)
+    return config_dir
+
+
+def get_state_file_path() -> Path:
+    """Get the state file path, prioritizing local directory.
+
+    Returns:
+        Path to the state file
+    """
+    local_state_file = Path.cwd() / ".f2b" / "state.json"
+    if local_state_file.parent.exists():
+        return local_state_file
+    return Path(os.path.expanduser("~/.fireflies_processor/state.json"))
+
+
+def get_config_file_path(config_file: Optional[str] = None) -> Path:
+    """Get the configuration file path.
+
+    Args:
+        config_file: Optional explicit config file path
+
+    Returns:
+        Path to the configuration file
+    """
+    if config_file:
+        return Path(os.path.expanduser(config_file))
+
+    local_config_file = Path.cwd() / ".f2b" / "config.ini"
+    if local_config_file.exists():
+        return local_config_file
+
+    # Fall back to the global config
+    return Path(os.path.expanduser("~/.config/fireflies-to-bear/config.ini"))
+
+
+def create_default_config() -> Tuple[Path, configparser.ConfigParser]:
+    """Create a default configuration file in the .f2b directory.
+
+    Returns:
+        Tuple of (config_path, config_parser)
+    """
+    config_dir = ensure_config_directory()
+    config_path = config_dir / "config.ini"
+
+    config = configparser.ConfigParser()
+
+    # Default configuration sections
+    config["directories"] = {
+        "summary_dir": "~/Library/CloudStorage/GoogleDrive/My Drive/Fireflies Meetings/Summaries",
+        "transcript_dir": "~/Library/CloudStorage/GoogleDrive/My Drive/Fireflies Meetings/Transcripts",
+    }
+
+    config["note_format"] = {
+        "title_template": "{date} - {meeting_name}",
+        "separator": "--==RAW NOTES==--",
+        "tags": "meeting,notes",
+    }
+
+    config["service"] = {
+        "interval": "300",
+        "state_file": ".f2b/state.json",
+        "backup_count": "3",
+    }
+
+    config["logging"] = {
+        "level": "INFO",
+        "file": ".f2b/logs/processor.log",
+    }
+
+    # Create logs directory
+    logs_dir = config_dir / "logs"
+    logs_dir.mkdir(exist_ok=True)
+
+    # Write the configuration file
+    with open(config_path, "w", encoding="utf-8") as f:
+        config.write(f)
+
+    return config_path, config
+
+
+def load_config(config_file: Optional[str] = None) -> configparser.ConfigParser:
+    """Load configuration from file.
+
+    Args:
+        config_file: Optional path to config file. If not provided, uses default location.
+
+    Returns:
+        ConfigParser object with loaded configuration
+
+    Raises:
+        ConfigValidationError: If config file cannot be loaded
+    """
+    config = configparser.ConfigParser()
+    config_path = get_config_file_path(config_file)
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config.read_file(f)
+            return config
+    except FileNotFoundError:
+        # If config doesn't exist, create default one
+        if not config_file:  # Only create default if no specific path was requested
+            path, config = create_default_config()
+            logging.info(f"Created default configuration at {path}")
+            return config
+        else:
+            raise ConfigValidationError(f"Config file not found: {config_path}")
+    except Exception as e:
+        raise ConfigValidationError(f"Error loading config file: {e}")
 
 
 class ConfigValidator:

@@ -14,6 +14,11 @@ from fireflies_to_bear.config import (
     LoggingConfig,
     NoteFormatConfig,
     ServiceConfig,
+    create_default_config,
+    ensure_config_directory,
+    get_config_directory,
+    get_config_file_path,
+    get_state_file_path,
 )
 
 
@@ -216,3 +221,95 @@ def test_validate_logging_config_unwritable_log_dir(
             validator.validate_logging_config(config)
     finally:
         os.chmod(log_dir, 0o755)  # Restore permissions for cleanup
+
+
+def test_get_config_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test get_config_directory behavior."""
+    # Test with existing .f2b directory
+    with tempfile.TemporaryDirectory() as temp_dir:
+        f2b_dir = Path(temp_dir) / ".f2b"
+        f2b_dir.mkdir()
+
+        # Mock cwd to return our temp directory
+        monkeypatch.setattr(Path, "cwd", lambda: Path(temp_dir))
+
+        # Function should return the .f2b directory
+        result = get_config_directory()
+        assert result == f2b_dir
+
+
+def test_ensure_config_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test ensure_config_directory creates directory if needed."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Mock cwd to return our temp directory
+        monkeypatch.setattr(Path, "cwd", lambda: Path(temp_dir))
+
+        # Directory should not exist yet
+        f2b_dir = Path(temp_dir) / ".f2b"
+        assert not f2b_dir.exists()
+
+        # Function should create and return the directory
+        result = ensure_config_directory()
+        assert result == f2b_dir
+        assert f2b_dir.exists()
+
+
+def test_get_state_file_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test get_state_file_path returns correct path."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        f2b_dir = Path(temp_dir) / ".f2b"
+        f2b_dir.mkdir()
+
+        # Mock cwd to return our temp directory
+        monkeypatch.setattr(Path, "cwd", lambda: Path(temp_dir))
+
+        # Function should return the state file in .f2b
+        result = get_state_file_path()
+        assert result == f2b_dir / "state.json"
+
+
+def test_get_config_file_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test get_config_file_path behavior."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        f2b_dir = Path(temp_dir) / ".f2b"
+        f2b_dir.mkdir()
+        config_path = f2b_dir / "config.ini"
+        config_path.touch()
+
+        # Mock cwd to return our temp directory
+        monkeypatch.setattr(Path, "cwd", lambda: Path(temp_dir))
+        monkeypatch.setattr(os.path, "expanduser", lambda p: p.replace("~", temp_dir))
+
+        # Test with no explicit path
+        result = get_config_file_path()
+        assert result == config_path
+
+        # Test with explicit path
+        explicit_path = "/explicit/path/config.ini"
+        result = get_config_file_path(explicit_path)
+        assert str(result) == explicit_path
+
+
+def test_create_default_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test create_default_config creates config file with proper sections."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Mock cwd to return our temp directory
+        monkeypatch.setattr(Path, "cwd", lambda: Path(temp_dir))
+
+        # Create default config
+        path, config = create_default_config()
+
+        # Check path and file existence
+        expected_path = Path(temp_dir) / ".f2b" / "config.ini"
+        assert path == expected_path
+        assert path.exists()
+
+        # Check config contents
+        assert "directories" in config
+        assert "note_format" in config
+        assert "service" in config
+        assert "logging" in config
+
+        # Check the logs directory was created
+        logs_dir = Path(temp_dir) / ".f2b" / "logs"
+        assert logs_dir.exists()

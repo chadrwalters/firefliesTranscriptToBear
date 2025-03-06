@@ -86,9 +86,10 @@ def test_load_state_existing_file(state_file: Path) -> None:
     assert processed_files[0].bear_note_id == "note123"
 
 
-def test_compute_file_hash(matched_files: MatchedFiles) -> None:
+def test_compute_file_hash(matched_files: MatchedFiles, temp_dir: Path) -> None:
     """Test file hash computation."""
-    state_manager = StateManager(Path("test_state.json"))
+    state_file = temp_dir / "test_state.json"
+    state_manager = StateManager(state_file)
 
     # Write some content to test files
     matched_files.summary.path.write_text("test content")
